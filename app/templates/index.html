@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>House Paint Estimator</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='/styles.css') }}" />
+  </head>
+  <body>
+    <main class="page">
+      <section class="card">
+        <div class="intro">
+          <p class="eyebrow">Paint Planning</p>
+          <h1>House Paint Estimator</h1>
+          <p class="description">
+            Enter the square footage of the house and this app will estimate how
+            many paint buckets you need and the approximate paint cost.
+          </p>
+        </div>
+
+        <form action="/estimate" method="post" class="form">
+          <label>
+            Square footage
+            <input
+              type="number"
+              name="square_footage"
+              min="1"
+              step="0.01"
+              required
+              value="{{ defaults.square_footage }}"
+            />
+          </label>
+
+          <label>
+            Coverage per bucket (sq ft)
+            <input
+              type="number"
+              name="coverage_per_bucket"
+              min="1"
+              step="1"
+              value="{{ defaults.coverage_per_bucket }}"
+            />
+          </label>
+
+          <label>
+            Cost per bucket ($)
+            <input
+              type="number"
+              name="bucket_cost"
+              min="0"
+              step="0.01"
+              value="{{ defaults.bucket_cost }}"
+            />
+          </label>
+
+          <label>
+            Number of coats
+            <input
+              type="number"
+              name="coats"
+              min="1"
+              step="1"
+              value="{{ defaults.coats }}"
+            />
+          </label>
+
+          <button type="submit">Estimate paint</button>
+        </form>
+
+        {% if error %}
+        <p class="error">{{ error }}</p>
+        {% endif %}
+
+        {% if result %}
+        <section class="results">
+          <h2>Estimate</h2>
+          <div class="result-grid">
+            <article>
+              <span class="label">Square footage</span>
+              <strong>{{ result.square_footage }}</strong>
+            </article>
+            <article>
+              <span class="label">Coats</span>
+              <strong>{{ result.coats }}</strong>
+            </article>
+            <article>
+              <span class="label">Total coverage needed</span>
+              <strong>{{ result.total_coverage_needed }} sq ft</strong>
+            </article>
+            <article>
+              <span class="label">Buckets required</span>
+              <strong>{{ result.buckets_required }}</strong>
+            </article>
+            <article>
+              <span class="label">Cost per bucket</span>
+              <strong>${{ "%.2f"|format(result.bucket_cost) }}</strong>
+            </article>
+            <article>
+              <span class="label">Estimated total cost</span>
+              <strong>${{ "%.2f"|format(result.total_cost) }}</strong>
+            </article>
+          </div>
+        </section>
+        {% endif %}
+      </section>
+    </main>
+  </body>
+</html>
