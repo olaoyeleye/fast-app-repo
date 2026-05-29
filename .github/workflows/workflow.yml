@@ -35,7 +35,7 @@ jobs:
         instance-name-nginx     = "${{ secrets.INSTANCE_NAME_NGINX }}" 
         vpc_name                = "${{ secrets.VPC_NAME }}"
 
-        key_name              = = "${{ secrets.KEY_NAME }}"  "tai-key"
+        key_name              =  "${{ secrets.KEY_NAME }}"  
         EOF
  
  
