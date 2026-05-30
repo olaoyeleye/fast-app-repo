@@ -69,7 +69,7 @@ resource "aws_instance" "nginx" {
     # Connect to EKS cluster — these are Terraform vars, no escape needed
     aws eks update-kubeconfig \
       --name ${aws_eks_cluster.main.name} \
-      --region ${var.aws_region}
+      --region ${var.region}
 
     # Install nginx
     yum install -y nginx
