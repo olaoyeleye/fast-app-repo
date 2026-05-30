@@ -68,3 +68,24 @@ jobs:
         docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
         docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
         echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+
+    - name: Update kubeconfig for EKS
+      run: |
+        aws eks update-kubeconfig --name ${{ secrets.EKS_CLUSTER_NAME }} --region ${{ secrets.AWS_REGION }}
+
+
+    - name: Deploy to EKS
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        IMAGE_TAG: ${{ github.sha }}
+      run: | 
+        sed -i "s|my-image|$ECR_REGISTRY/fast-app-repo:$IMAGE_TAG|g" k8s/deployment.yml
+        kubectl apply -f k8s/deployment.yml
+         # Wait for rollout to finish
+        kubectl rollout status deployment/fast-app --timeout=120s
+      # ---- Print the external URL ----
+    - name: Get Load Balancer URL
+      run: |
+        kubectl get service fast-app-service \
+        -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'

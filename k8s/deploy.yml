@@ -1,0 +1,27 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fast-app
+  namespace: default
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: fast-app
+  template:
+    metadata:
+      labels:
+        app: fast-app
+    spec:
+      containers:
+        - name: fast-app
+          image: my-image  
+          ports:
+            - containerPort: 8000
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "250m"
+            limits:
+              memory: "256Mi"
+              cpu: "500m"
