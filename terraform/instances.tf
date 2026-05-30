@@ -49,34 +49,35 @@ resource "aws_instance" "nginx" {
   subnet_id              = aws_subnet.public-kunle-subnet.id
   vpc_security_group_ids = [aws_security_group.public-kunle-sg.id]
   iam_instance_profile   = aws_iam_instance_profile.ec2_eks_profile.name
-
   user_data = <<-EOF
-    #!/bin/bash
-    set -e
+      #!/bin/bash
+      exec > /var/log/user-data.log 2>&1
 
-    yum update -y
+      yum update -y
 
-    # Install AWS CLI v2
-    curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-    unzip awscliv2.zip
-    sudo ./aws/install
+      # Install AWS CLI v2
+      curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+      unzip awscliv2.zip
+      sudo ./aws/install
 
-    # Install kubectl
-    curl -LO "https://dl.k8s.io/release/$$(curl -sL https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-    chmod +x kubectl
-    mv kubectl /usr/local/bin/
+      # Install kubectl
+      curl -LO "https://dl.k8s.io/release/$$(curl -sL https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+      chmod +x kubectl
+      mv kubectl /usr/local/bin/
 
-    # Connect to EKS cluster — these are Terraform vars, no escape needed
-    aws eks update-kubeconfig \
-      --name ${aws_eks_cluster.main.name} \
-      --region ${var.region}
+      # Connect to EKS — allow this to fail without stopping the script
+      aws eks update-kubeconfig \
+        --name ${aws_eks_cluster.main.name} \
+        --region ${var.region} || echo "WARNING: eks update-kubeconfig failed, run manually later"
 
-    # Install nginx
-    yum install -y nginx
-    systemctl start nginx
-    systemctl enable nginx
+      # Install nginx — this will now always run
+      yum install -y nginx
+      systemctl start nginx
+      systemctl enable nginx
+
+      echo "DONE"
   EOF
-
+  
   tags = {
     Name = var.instance-name-nginx
   }
