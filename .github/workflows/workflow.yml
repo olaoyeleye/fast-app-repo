@@ -80,8 +80,9 @@ jobs:
         ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         IMAGE_TAG: ${{ github.sha }}
       run: | 
-        sed -i "s|my-image|$ECR_REGISTRY/fast-app-repo:$IMAGE_TAG|g" k8s/deployment.yml
-        kubectl apply -f k8s/deployment.yml
+        sed -i "s|my-image|$ECR_REGISTRY/fast-app-repo:$IMAGE_TAG|g" k8s/deploy.yml
+        kubectl apply -f k8s/deploy.yml
+        kubectl apply -f k8s/service.yml
          # Wait for rollout to finish
         kubectl rollout status deployment/fast-app --timeout=120s
       # ---- Print the external URL ----
