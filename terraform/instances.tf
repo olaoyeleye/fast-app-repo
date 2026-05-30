@@ -10,7 +10,6 @@ resource "aws_instance" "nginx" {
   user_data = <<-EOF
     #!/bin/bash
     set -e
-
     # Update system
     yum update -y
 
