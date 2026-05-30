@@ -78,6 +78,6 @@ resource "aws_instance" "nginx" {
   EOF
 
   tags = {
-    Name = var.instance_name_nginx
+    Name = var.instance-name-nginx
   }
 }
