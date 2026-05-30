@@ -5,7 +5,7 @@ resource "aws_instance" "nginx" {
   vpc_security_group_ids = [aws_security_group.public-kunle-sg.id] 
 
   # Attach the IAM role
-  iam_instance_profile   = aws_iam_instance_profile.ec2_eks_profile.name
+  iam_instance_profile   = aws_iam_instance_profile.ec2_eks_profile.name 
   
 
   user_data = <<-EOF
