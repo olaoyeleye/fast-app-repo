@@ -52,6 +52,7 @@ jobs:
       run: terraform apply -auto-approve tfplan
       #run: terraform destroy --var-file=terraform.tfvars --auto-approve 
 
+
     - name: Login to Amazon ECR
       id: login-ecr
       uses: aws-actions/amazon-ecr-login@v2
