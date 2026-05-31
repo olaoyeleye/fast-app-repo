@@ -52,30 +52,25 @@ resource "aws_instance" "nginx" {
   user_data = <<-EOF
       #!/bin/bash
       exec > /var/log/user-data.log 2>&1
+      set -e
 
-      yum update -y
+      if command -v yum >/dev/null 2>&1; then
+        yum update -y
+        yum install -y nginx
+      elif command -v dnf >/dev/null 2>&1; then
+        dnf update -y
+        dnf install -y nginx
+      elif command -v apt-get >/dev/null 2>&1; then
+        apt-get update -y
+        apt-get install -y nginx
+      else
+        echo "ERROR: unsupported package manager" >&2
+        exit 1
+      fi
 
-      # Install AWS CLI v2
-      curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-      unzip awscliv2.zip
-      sudo ./aws/install
-
-      # Install kubectl
-      curl -LO "https://dl.k8s.io/release/$$(curl -sL https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-      chmod +x kubectl
-      mv kubectl /usr/local/bin/
-
-      # Connect to EKS — allow this to fail without stopping the script
-      aws eks update-kubeconfig \
-        --name ${aws_eks_cluster.main.name} \
-        --region ${var.region} || echo "WARNING: eks update-kubeconfig failed, run manually later"
-
-      # Install nginx — this will now always run
-      yum install -y nginx
-      systemctl start nginx
       systemctl enable nginx
-
-      echo "DONE"
+      systemctl start nginx
+      echo "nginx installed and started"
   EOF
   
   tags = {
