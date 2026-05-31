@@ -52,25 +52,46 @@ resource "aws_instance" "nginx" {
   user_data = <<-EOF
       #!/bin/bash
       exec > /var/log/user-data.log 2>&1
-      set -e
+      set -x
 
       if command -v yum >/dev/null 2>&1; then
-        yum update -y
-        yum install -y nginx
+        PKG_MANAGER=yum
       elif command -v dnf >/dev/null 2>&1; then
-        dnf update -y
-        dnf install -y nginx
+        PKG_MANAGER=dnf
       elif command -v apt-get >/dev/null 2>&1; then
-        apt-get update -y
-        apt-get install -y nginx
+        PKG_MANAGER=apt-get
       else
         echo "ERROR: unsupported package manager" >&2
         exit 1
       fi
 
+      if [ "$PKG_MANAGER" = "apt-get" ]; then
+        apt-get update -y
+        apt-get install -y curl unzip nginx
+      else
+        $PKG_MANAGER update -y
+        $PKG_MANAGER install -y curl unzip nginx
+      fi
+
+      if ! command -v aws >/dev/null 2>&1; then
+        curl -sS "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "/tmp/awscliv2.zip"
+        unzip /tmp/awscliv2.zip -d /tmp
+        /tmp/aws/install
+      fi
+
+      if ! command -v kubectl >/dev/null 2>&1; then
+        curl -sLO "https://dl.k8s.io/release/$(curl -sL https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+        chmod +x kubectl
+        mv kubectl /usr/local/bin/
+      fi
+
+      if command -v aws >/dev/null 2>&1; then
+        aws eks update-kubeconfig --name ${aws_eks_cluster.main.name} --region ${var.region} || echo "WARNING: eks update-kubeconfig failed"
+      fi
+
       systemctl enable nginx
       systemctl start nginx
-      echo "nginx installed and started"
+      echo "userdata complete"
   EOF
   
   tags = {
