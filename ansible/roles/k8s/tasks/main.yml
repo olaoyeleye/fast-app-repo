@@ -54,5 +54,12 @@
   args:
     creates: /root/.kube/config
 
+- name: Replace image placeholder with the deployed application image
+  replace:
+    path: "{{ k8s_manifest_dest }}/deploy.yml"
+    regexp: 'my-image'
+    replace: "{{ app_image }}"
+  when: app_image is defined
+
 - name: Apply Kubernetes manifests
   shell: kubectl apply -f {{ k8s_manifest_dest }}
