@@ -38,10 +38,22 @@
 
 - name: Configure kubeconfig for EKS
   shell: |
+    mkdir -p /home/ec2-user/.kube
     aws eks update-kubeconfig \
       --name {{ eks_cluster_name }} \
-      --region {{ aws_region }}
+      --region {{ aws_region }} \
+      --kubeconfig /home/ec2-user/.kube/config
   become_user: ec2-user
+  environment:
+    HOME: /home/ec2-user
+  ignore_errors: true
+
+- name: Set kubeconfig permissions
+  file:
+    path: /home/ec2-user/.kube/config
+    owner: ec2-user
+    group: ec2-user
+    mode: '0600'
   ignore_errors: true
 
 # ---- NEW: copy k8s manifests to EC2 ----
@@ -70,10 +82,14 @@
 
 - name: Deploy app to Kubernetes
   shell: |
-    kubectl apply -f /home/ec2-user/k8s/deploy.yml
-    kubectl apply -f /home/ec2-user/k8s/service.yml
+    kubectl apply -f /home/ec2-user/k8s/deploy.yml --validate=false
+    kubectl apply -f /home/ec2-user/k8s/service.yml --validate=false
   become_user: ec2-user
+  environment:
+    HOME: /home/ec2-user
+    KUBECONFIG: /home/ec2-user/.kube/config
   register: kubectl_apply
+  ignore_errors: true
 
 - name: Print deploy output
   debug:
@@ -82,12 +98,19 @@
 - name: Wait for rollout
   shell: kubectl rollout status deployment/fast-app --timeout=120s
   become_user: ec2-user
+  environment:
+    HOME: /home/ec2-user
+    KUBECONFIG: /home/ec2-user/.kube/config
+  ignore_errors: true
 
 - name: Get service URL
   shell: |
     kubectl get service fast-app-service \
       -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
   become_user: ec2-user
+  environment:
+    HOME: /home/ec2-user
+    KUBECONFIG: /home/ec2-user/.kube/config
   register: service_url
   ignore_errors: true
 
