@@ -20,7 +20,7 @@
     return_content: yes
   register: kubectl_version
 
-- name: Download kubectl binary directly
+- name: Download kubectl binary
   get_url:
     url: "https://dl.k8s.io/release/{{ kubectl_version.content | trim }}/bin/linux/amd64/kubectl"
     dest: /usr/local/bin/kubectl
@@ -44,8 +44,51 @@
   become_user: ec2-user
   ignore_errors: true
 
+# ---- NEW: copy k8s manifests to EC2 ----
+- name: Create k8s directory on EC2
+  file:
+    path: /home/ec2-user/k8s
+    state: directory
+    owner: ec2-user
+    group: ec2-user
+    mode: '0755'
+
+- name: Copy k8s manifests to EC2
+  copy:
+    src: "{{ playbook_dir }}/../k8s/"
+    dest: /home/ec2-user/k8s/
+    owner: ec2-user
+    group: ec2-user
+    mode: '0644'
+
+# ---- Update image in deployment manifest ----
+- name: Set app image in deployment
+  replace:
+    path: /home/ec2-user/k8s/deployment.yml
+    regexp: 'image:.*'
+    replace: "image: {{ app_image }}"
+
 - name: Deploy app to Kubernetes
-  shell: |
-    kubectl apply -f /home/ec2-user/k8s/
+  shell: kubectl apply -f /home/ec2-user/k8s/
   become_user: ec2-user
+  register: kubectl_apply
+
+- name: Print deploy output
+  debug:
+    msg: "{{ kubectl_apply.stdout }}"
+
+- name: Wait for rollout
+  shell: kubectl rollout status deployment/fast-app --timeout=120s
+  become_user: ec2-user
+
+- name: Get service URL
+  shell: |
+    kubectl get service fast-app-service \
+      -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
+  become_user: ec2-user
+  register: service_url
   ignore_errors: true
+
+- name: Print service URL
+  debug:
+    msg: "App URL: {{ service_url.stdout }}"
