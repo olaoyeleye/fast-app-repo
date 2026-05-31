@@ -49,7 +49,8 @@ jobs:
 
     - name: Terraform Apply --var-file=terraform.tfvars --auto-approve
       working-directory: ./terraform
-      run: terraform apply -auto-approve tfplan
+      #run: terraform apply -auto-approve tfplan
+      run: terraform destroy -auto-approve tfplan
 
     - name: Login to Amazon ECR
       id: login-ecr
