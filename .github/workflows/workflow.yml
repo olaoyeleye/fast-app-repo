@@ -38,30 +38,84 @@ jobs:
 
         key_name              =  "${{ secrets.KEY_NAME }}"  
         EOF
-    - name: Install eksctl
-      run: |
-        curl --silent --location \
-      "https://github.com/eksctl-io/eksctl/releases/latest/download/eksctl_Linux_amd64.tar.gz" \
-      | tar xz -C /tmp
-        sudo mv /tmp/eksctl /usr/local/bin
 
-    - name: Run Ansible Playbook
+    - name: Terraform Init
+      working-directory: ./terraform
+      run: terraform init
+
+    - name: Terraform Plan
+      working-directory: ./terraform
+      run: terraform plan -out=tfplan
+
+    - name: Terraform Apply --var-file=terraform.tfvars --auto-approve
+      working-directory: ./terraform
+      run: terraform apply -auto-approve tfplan
+
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v2
+
+    - name: Build, Tag and Push image to ECR
       env:
-        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        AWS_REGION: ${{ secrets.AWS_REGION }}
-        EKS_CLUSTER_NAME: ${{ secrets.EKS_CLUSTER_NAME }}
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        ECR_REPOSITORY: fast-app-repo
+        IMAGE_TAG: ${{ github.sha }}
       run: |
-        ansible-playbook ansible/playbook.yml \
-          --extra-vars "app_image=$ECR_IMAGE \
-                        eks_cluster_name=${{ secrets.EKS_CLUSTER_NAME }} \
-                        aws_region=${{ secrets.AWS_REGION }} \
-                        vpc_name=${{ secrets.VPC_NAME }}"
+        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
 
+        # Also tag as latest
+        docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+        echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
 
+    - name: Install Ansible
+      run: |
+        python3 -m pip install --upgrade pip
+        python3 -m pip install ansible
 
+    - name: Get Nginx public IP
+      id: nginx-ip
+      working-directory: ./terraform
+      run: echo "NGINX_IP=$(terraform output -raw nginx_public_ip)" >> $GITHUB_OUTPUT
 
+    - name: Save SSH private key
+      run: |
+        mkdir -p ~/.ssh
+        echo "${{ secrets.ANSIBLE_SSH_PRIVATE_KEY }}" > ~/.ssh/ansible_key.pem
+        chmod 600 ~/.ssh/ansible_key.pem
+      shell: bash
 
+    - name: Create Ansible inventory
+      run: |
+        cat > ansible/hosts.ini <<EOF
+        [nginx]
+        nginx ansible_host=${{ steps.nginx-ip.outputs.NGINX_IP }}
+
+        [nginx:vars]
+        ansible_user=ec2-user
+        ansible_ssh_private_key_file=~/.ssh/ansible_key.pem
+        aws_region=${{ secrets.AWS_REGION }}
+        eks_cluster_name=${{ secrets.EKS_CLUSTER_NAME }}
+        app_image=${{ steps.login-ecr.outputs.registry }}/fast-app-repo:${{ github.sha }}
+        EOF
+      shell: bash
+
+    - name: Run Ansible playbook
+      run: |
+        ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook ansible/playbook.yml
+
+    - name: Install kubectl
+      run: |
+        curl -LO "https://dl.k8s.io/release/$(curl -sL https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+        chmod +x kubectl
+        sudo mv kubectl /usr/local/bin/
+
+    - name: Get Load Balancer URL
+      run: |
+        aws eks update-kubeconfig --name ${{ secrets.EKS_CLUSTER_NAME }} --region ${{ secrets.AWS_REGION }}
+        kubectl get service fast-app-service \
+        -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
 
     - name: Terraform Init
       working-directory: ./terraform
