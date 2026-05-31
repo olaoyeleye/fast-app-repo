@@ -38,6 +38,30 @@ jobs:
 
         key_name              =  "${{ secrets.KEY_NAME }}"  
         EOF
+    - name: Install eksctl
+      run: |
+        curl --silent --location \
+      "https://github.com/eksctl-io/eksctl/releases/latest/download/eksctl_Linux_amd64.tar.gz" \
+      | tar xz -C /tmp
+        sudo mv /tmp/eksctl /usr/local/bin
+
+    - name: Run Ansible Playbook
+      env:
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        AWS_REGION: ${{ secrets.AWS_REGION }}
+        EKS_CLUSTER_NAME: ${{ secrets.EKS_CLUSTER_NAME }}
+      run: |
+        ansible-playbook ansible/playbook.yml \
+          --extra-vars "app_image=$ECR_IMAGE \
+                        eks_cluster_name=${{ secrets.EKS_CLUSTER_NAME }} \
+                        aws_region=${{ secrets.AWS_REGION }} \
+                        vpc_name=${{ secrets.VPC_NAME }}"
+
+
+
+
+
 
     - name: Terraform Init
       working-directory: ./terraform
