@@ -62,14 +62,16 @@
     mode: '0644'
 
 # ---- Update image in deployment manifest ----
-- name: Set app image in deployment
+- name: Set app image in deploy.yml
   replace:
-    path: /home/ec2-user/k8s/deployment.yml
-    regexp: 'image:.*'
+    path: /home/ec2-user/k8s/deploy.yml
+    regexp: 'image: my-image'
     replace: "image: {{ app_image }}"
 
 - name: Deploy app to Kubernetes
-  shell: kubectl apply -f /home/ec2-user/k8s/
+  shell: |
+    kubectl apply -f /home/ec2-user/k8s/deploy.yml
+    kubectl apply -f /home/ec2-user/k8s/service.yml
   become_user: ec2-user
   register: kubectl_apply
 
