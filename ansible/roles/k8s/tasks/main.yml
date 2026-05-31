@@ -1,0 +1,58 @@
+- name: Ensure required packages are installed
+  package:
+    name:
+    - curl
+    - unzip
+    - python3
+    state: present
+
+- name: Download AWS CLI v2 installer
+  get_url:
+    url: https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip
+    dest: /tmp/awscliv2.zip
+    mode: '0644'
+    force: no
+
+- name: Install AWS CLI v2
+  shell: |
+    unzip -o /tmp/awscliv2.zip -d /tmp
+    /tmp/aws/install
+  args:
+    creates: /usr/local/bin/aws
+
+- name: Download kubectl
+  shell: |
+    curl -sLO "https://dl.k8s.io/release/$(curl -sL https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+    chmod +x kubectl
+    mv kubectl /usr/local/bin/
+  args:
+    creates: /usr/local/bin/kubectl
+
+- name: Create Kubernetes manifest directory
+  file:
+    path: "{{ k8s_manifest_dest }}"
+    state: directory
+    mode: '0755'
+
+- name: Copy Kubernetes manifests to target host
+  copy:
+    src: "{{ item }}"
+    dest: "{{ k8s_manifest_dest }}/"
+  loop:
+  - "{{ playbook_dir }}/../k8s/deploy.yml"
+  - "{{ playbook_dir }}/../k8s/service.yml"
+
+- name: Ensure kube config directory exists
+  file:
+    path: /root/.kube
+    state: directory
+    mode: '0755'
+
+- name: Configure kubectl for the EKS cluster
+  shell: |
+    aws eks update-kubeconfig --name {{ eks_cluster_name }} --region {{ aws_region }} --alias {{ eks_cluster_name }}
+  args:
+    creates: /root/.kube/config
+
+- name: Apply Kubernetes manifests
+  shell: kubectl apply -f {{ k8s_manifest_dest }}
