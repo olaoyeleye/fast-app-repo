@@ -105,13 +105,17 @@ jobs:
 
 
     - name: Save SSH private key
+      env:
+        SSH_KEY: ${{ secrets.ANSIBLE_SSH_PRIVATE_KEY }}
       run: |
         mkdir -p ~/.ssh
-        printf '%s' "${{ secrets.ANSIBLE_SSH_PRIVATE_KEY }}" > ~/.ssh/ansible_key.pem
-        sed -i 's/\r//' ~/.ssh/ansible_key.pem
+        echo "$SSH_KEY" > ~/.ssh/ansible_key.pem
+        sed -i 's/\r//g' ~/.ssh/ansible_key.pem
         chmod 600 ~/.ssh/ansible_key.pem
+    
+        # Verify key is valid before continuing
         ssh-keygen -y -f ~/.ssh/ansible_key.pem
-
+        echo "Key is valid"
 
 
 
