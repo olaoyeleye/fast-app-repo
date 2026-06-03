@@ -2,7 +2,7 @@ variable "region" {}
 variable "ami" {}
 variable "instance_type" {}
 variable "key_name" {
-    default = "kunle-vpc-deployer-key"
+   # default = "kunle-vpc-deployer-key"
 }
 variable "instance-name-nginx" {} 
 
