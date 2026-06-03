@@ -1,8 +1,8 @@
 name: Deploy Entire Infra
 
 on:
-  #push:
-  #  branches: [ feat-dev ]
+  push:
+    branches: [ feat-dev ]
   workflow_dispatch:
     inputs:
       terraform_action:
@@ -11,8 +11,12 @@ on:
         default: 'apply'
         type: choice
         options:
-        - apply
-        - destroy
+          - apply
+          - destroy
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   deploy:
@@ -38,13 +42,12 @@ jobs:
       working-directory: ./terraform
       run: |
         cat > terraform.tfvars <<EOF
-        region                  = "${{ secrets.AWS_REGION }}"
-        ami                     = "${{ secrets.AMI_ID }}"
-        instance_type           = "${{ secrets.INSTANCE_TYPE }}"
-        instance-name-nginx     = "${{ secrets.INSTANCE_NAME_NGINX }}" 
-        vpc_name                = "${{ secrets.VPC_NAME }}"
-
-        key_name              =  "${{ secrets.KEY_NAME }}"  
+        region              = "${{ secrets.AWS_REGION }}"
+        ami                 = "${{ secrets.AMI_ID }}"
+        instance_type       = "${{ secrets.INSTANCE_TYPE }}"
+        instance-name-nginx = "${{ secrets.INSTANCE_NAME_NGINX }}"
+        vpc_name            = "${{ secrets.VPC_NAME }}"
+        key_name            = "${{ secrets.KEY_NAME }}"
         EOF
 
     - name: Terraform Init
@@ -55,21 +58,26 @@ jobs:
       working-directory: ./terraform
       run: terraform plan -out=tfplan
 
-    - name: Terraform Apply --var-file=terraform.tfvars --auto-approve
+    - name: Terraform Apply
       if: ${{ github.event.inputs.terraform_action == 'apply' || github.event_name == 'push' }}
       working-directory: ./terraform
       run: terraform apply -auto-approve tfplan
 
-    - name: Terraform Destroy --var-file=terraform.tfvars --auto-approve
+    - name: Terraform Destroy
       if: ${{ github.event.inputs.terraform_action == 'destroy' }}
       working-directory: ./terraform
-      run: terraform destroy --var-file=terraform.tfvars --auto-approve
+      run: terraform destroy --var-file=terraform.tfvars -auto-approve
+
+    # ---- Everything below only runs on apply ----
 
     - name: Login to Amazon ECR
+      if: ${{ github.event.inputs.terraform_action != 'destroy' }}
       id: login-ecr
       uses: aws-actions/amazon-ecr-login@v2
 
     - name: Build, Tag and Push image to ECR
+      if: ${{ github.event.inputs.terraform_action != 'destroy' }}
+      id: build-image
       env:
         ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         ECR_REPOSITORY: fast-app-repo
@@ -77,37 +85,81 @@ jobs:
       run: |
         docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
         docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-
-        # Also tag as latest
-        docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
+        docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
+                   $ECR_REGISTRY/$ECR_REPOSITORY:latest
         docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
         echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
 
     - name: Install Ansible
+      if: ${{ github.event.inputs.terraform_action != 'destroy' }}
       run: |
         python3 -m pip install --upgrade pip
-        python3 -m pip install ansible
+        python3 -m pip install ansible boto3 botocore
+
+    - name: Install kubectl
+      if: ${{ github.event.inputs.terraform_action != 'destroy' }}
+      run: |
+        curl -LO "https://dl.k8s.io/release/$(curl -sL https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+        chmod +x kubectl
+        sudo mv kubectl /usr/local/bin/
+
+    - name: Install eksctl
+      if: ${{ github.event.inputs.terraform_action != 'destroy' }}
+      run: |
+        curl --silent --location \
+          "https://github.com/eksctl-io/eksctl/releases/latest/download/eksctl_Linux_amd64.tar.gz" \
+          | tar xz -C /tmp
+        sudo mv /tmp/eksctl /usr/local/bin
 
     - name: Get Nginx public IP
+      if: ${{ github.event.inputs.terraform_action != 'destroy' }}
       id: nginx-ip
       working-directory: ./terraform
       run: |
         echo "NGINX_IP=$(terraform output -raw nginx_public_ip)" >> $GITHUB_OUTPUT
 
     - name: Save SSH private key
+      if: ${{ github.event.inputs.terraform_action != 'destroy' }}
       env:
         SSH_KEY: ${{ secrets.ANSIBLE_SSH_PRIVATE_KEY }}
       run: |
         mkdir -p /home/runner/.ssh
-        printf '%s' "$SSH_KEY" > /home/runner/.ssh/ansible_key.pem
+        echo "$SSH_KEY" > /home/runner/.ssh/ansible_key.pem
         sed -i 's/\r//g' /home/runner/.ssh/ansible_key.pem
         chmod 600 /home/runner/.ssh/ansible_key.pem
-
-        # Verify key is valid before continuing
         ssh-keygen -y -f /home/runner/.ssh/ansible_key.pem
         echo "Key is valid"
 
+    - name: Wait for EC2 to be ready
+      if: ${{ github.event.inputs.terraform_action != 'destroy' }}
+      run: |
+        for i in {1..12}; do
+          ssh -i /home/runner/.ssh/ansible_key.pem \
+            -o StrictHostKeyChecking=no \
+            -o ConnectTimeout=5 \
+            ec2-user@${{ steps.nginx-ip.outputs.NGINX_IP }} \
+            "echo ready" && break
+          echo "Attempt $i failed, waiting 15s..."
+          sleep 15
+        done
+
+    - name: Add EC2 IAM role to EKS aws-auth
+      if: ${{ github.event.inputs.terraform_action != 'destroy' }}
+      run: |
+        aws eks update-kubeconfig \
+          --name ${{ secrets.EKS_CLUSTER_NAME }} \
+          --region ${{ secrets.AWS_REGION }}
+
+        eksctl create iamidentitymapping \
+          --cluster ${{ secrets.EKS_CLUSTER_NAME }} \
+          --region ${{ secrets.AWS_REGION }} \
+          --arn arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/${{ secrets.VPC_NAME }}-ec2-eks-role \
+          --username ec2-eks-role \
+          --group system:masters \
+          --no-duplicate-arns
+
     - name: Create Ansible inventory
+      if: ${{ github.event.inputs.terraform_action != 'destroy' }}
       run: |
         cat > ansible/hosts.ini <<EOF
         [nginx]
@@ -119,22 +171,17 @@ jobs:
         ansible_ssh_common_args='-o StrictHostKeyChecking=no -o IdentitiesOnly=yes'
         aws_region=${{ secrets.AWS_REGION }}
         eks_cluster_name=${{ secrets.EKS_CLUSTER_NAME }}
-        app_image=${{ steps.login-ecr.outputs.registry }}/fast-app-repo:${{ github.sha }}
         EOF
-      shell: bash
 
     - name: Run Ansible playbook
+      if: ${{ github.event.inputs.terraform_action != 'destroy' }}
       run: |
-        ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook ansible/playbook.yml
-
-    - name: Install kubectl
-      run: |
-        curl -LO "https://dl.k8s.io/release/$(curl -sL https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-        chmod +x kubectl
-        sudo mv kubectl /usr/local/bin/
+        ANSIBLE_CONFIG=ansible/ansible.cfg \
+        ansible-playbook ansible/playbook.yml \
+          --extra-vars "app_image=${{ steps.login-ecr.outputs.registry }}/fast-app-repo:${{ github.sha }}"
 
     - name: Get Load Balancer URL
+      if: ${{ github.event.inputs.terraform_action != 'destroy' }}
       run: |
-        aws eks update-kubeconfig --name ${{ secrets.EKS_CLUSTER_NAME }} --region ${{ secrets.AWS_REGION }}
         kubectl get service fast-app-service \
-        -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
+          -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
