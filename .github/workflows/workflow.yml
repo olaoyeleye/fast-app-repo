@@ -2,7 +2,7 @@ name: Deploy Entire Infra
 
 on:
   push:
-    branches: [ feat-dev ]
+    branches: [ main ]
   workflow_dispatch:
     inputs:
       terraform_action:
