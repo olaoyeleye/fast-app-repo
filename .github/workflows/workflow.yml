@@ -8,16 +8,16 @@ on:
       terraform_action:
         description: 'Terraform action to perform'
         required: true
-        default: 'apply'
+        default: 'destroy'
         type: choice
         options:
           - apply
           - destroy
 
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+#concurrency:
+#  group: ${{ github.workflow }}-${{ github.ref }}
+#  cancel-in-progress: true
 
 jobs:
   deploy:
