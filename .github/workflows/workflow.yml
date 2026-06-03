@@ -4,6 +4,15 @@ on:
   push:
     branches: [ feat-dev ]
   workflow_dispatch:
+    inputs:
+      terraform_action:
+        description: 'Terraform action to perform'
+        required: true
+        default: 'apply'
+        type: choice
+        options:
+          - apply
+          - destroy
 
 
 jobs:
@@ -48,8 +57,13 @@ jobs:
       run: terraform plan -out=tfplan
 
     - name: Terraform Apply --var-file=terraform.tfvars --auto-approve
+      if: ${{ github.event.inputs.terraform_action == 'apply' || github.event_name == 'push' }}
       working-directory: ./terraform
-      #run: terraform apply -auto-approve tfplan
+      run: terraform apply -auto-approve tfplan
+ 
+    - name: Terraform Destroy --var-file=terraform.tfvars --auto-approve
+      if: ${{ github.event.inputs.terraform_action == 'destroy' }}  
+      working-directory: ./terraform
       run: terraform destroy --var-file=terraform.tfvars --auto-approve 
 
 
