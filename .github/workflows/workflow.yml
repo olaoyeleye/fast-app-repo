@@ -26,6 +26,16 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v4
 
+    - name: Set Terraform Action Environment Variable
+      run: |
+        # If triggered by push, the input is empty, so it defaults to 'apply'
+        ACTION="${{ github.event.inputs.terraform_action }}"
+        if [ -z "$ACTION" ]; then
+          ACTION="apply"
+        fi
+        echo "TF_ACTION=$ACTION" >> $GITHUB_ENV
+
+
     - name: Configure AWS Credentials
       uses: aws-actions/configure-aws-credentials@v4
       with:
