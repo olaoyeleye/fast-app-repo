@@ -10,7 +10,7 @@ from app.calculator import estimate_paint
 
 BASE_DIR = Path(__file__).resolve().parent
 
-app = FastAPI(title="House Paint Estimator")
+app = FastAPI(title="House Paint Estimator" , root_path="/paint-planning")
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
