@@ -93,9 +93,8 @@ jobs:
     - name: Get Nginx public IP
       id: nginx-ip
       working-directory: ./terraform
-      run: echo "NGINX_IP=$(terraform output -raw nginx_public_ip)" >> $GITHUB_OUTPUT
-    
-        # Debug — check key looks valid
+      run: |
+        echo "NGINX_IP=$(terraform output -raw nginx_public_ip)" >> $GITHUB_OUTPUT
         head -1 ~/.ssh/ansible_key.pem   # should print -----BEGIN RSA PRIVATE KEY-----
         tail -1 ~/.ssh/ansible_key.pem   # should print -----END RSA PRIVATE KEY-----
         ssh-keygen -y -f ~/.ssh/ansible_key.pem  # will error if key is malformed
@@ -109,7 +108,6 @@ jobs:
     #     echo "${{ secrets.ANSIBLE_SSH_PRIVATE_KEY }}" > ~/.ssh/ansible_key.pem
     #     chmod 600 ~/.ssh/ansible_key.pem
     #   shell: bash
-
 
 
 
