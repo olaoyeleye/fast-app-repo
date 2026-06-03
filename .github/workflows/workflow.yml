@@ -94,11 +94,6 @@ jobs:
       id: nginx-ip
       working-directory: ./terraform
       run: echo "NGINX_IP=$(terraform output -raw nginx_public_ip)" >> $GITHUB_OUTPUT
-    - name: Save SSH private key
-      run: |
-        mkdir -p ~/.ssh
-        echo "${{ secrets.ANSIBLE_SSH_PRIVATE_KEY }}" | tr -d '\r' > ~/.ssh/ansible_key.pem
-        chmod 600 ~/.ssh/ansible_key.pem
     
         # Debug — check key looks valid
         head -1 ~/.ssh/ansible_key.pem   # should print -----BEGIN RSA PRIVATE KEY-----
