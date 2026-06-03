@@ -159,4 +159,6 @@ jobs:
         kubectl get service fast-app-service \
         -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
 
-   
+
+
+
