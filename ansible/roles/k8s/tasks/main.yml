@@ -73,6 +73,7 @@
     group: ec2-user
     mode: '0644'
 
+
 # ---- Update image in deployment manifest ----
 - name: Set app image in deploy.yml
   replace:
